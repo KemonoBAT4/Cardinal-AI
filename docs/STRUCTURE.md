@@ -29,6 +29,7 @@ cardinal/
 ├── tools/
 │   ├── base.py                # BaseTool ABC
 │   ├── web_search.py          # Tavily API
+│   ├── web_search.py          # Gets the time by timezone
 │   ├── file_manager.py
 │   ├── code_executor.py       # Sandbox RestrictedPython
 │   ├── calendar_tool.py
