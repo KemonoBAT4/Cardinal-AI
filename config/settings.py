@@ -25,26 +25,33 @@ class Settings(BaseSettings):
     claude_temperature : float = 0.7
 
     # Gemini
-    google_api_key     : str   = "" # TODO: implement
-    gemini_model       : str   = "" # TODO: implement
+    google_api_key     : str   = ""
+    gemini_model       : str   = ""
     gemini_max_tokens  : int   = 0
     gemini_temperature : float = 0.7
 
     # Ollama
-    ollama_base_url    : str   = "https://localhost:11434"
+    ollama_base_url    : str   = "http://localhost:11434"
     ollama_model       : str   = "llama3.1:8b"
     ollama_temperature : float = 0.7
 
     #endregion ------------------------ LLM ------------------------ #
 
 
-    #region    ------------------------ MEMORY
+    #region    ------------------------ MEMORY ------------------------ #
 
     redis_url          : str = "redis://localhost:6379"
     chroma_persist_dir : str = "./data/chroma"
     sqllite_path       : str = "./data/cardinal.db"
 
     #endregion ------------------------ MEMORY ------------------------ #
+
+
+    #region    ------------------------ TOOL API KEYS ------------------------ #
+
+    tavily_api_key : str = ""
+
+    #endregion ------------------------ TOOL API KEYS ------------------------ #
 
 
     #region    ------------------------ VOICE ------------------------ #
@@ -59,3 +66,6 @@ class Settings(BaseSettings):
         env_file          : str  = ".env"
         env_file_encoding : str  = "utf-8"
         case_sensitive    : bool = False
+        extra             : str  = "ignore"
+    # #endclass Config
+# #endclass Settings
