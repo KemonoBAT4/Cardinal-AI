@@ -26,11 +26,14 @@ import httpx
 from langchain_anthropic import ChatAnthropic
 from langchain_core.language_models import BaseChatModel
 from langchain_core.tools import BaseTool
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_google_genai.chat_models import ChatGoogleGenerativeAIError
 from langchain_ollama import ChatOllama
 
-from core.settings import Settings
+from config.settings import Settings
 
 logger = logging.getLogger(__name__)
+DEFAULT_GEMINI_MODEL: str = "gemini-3.1-flash-lite" # "gemini-1.5-flash"
 
 
 def _ollama_is_running(base_url: str, timeout: float = 3.0) -> bool:
@@ -50,11 +53,9 @@ def _ollama_is_running(base_url: str, timeout: float = 3.0) -> bool:
         response = httpx.get(f"{base_url}/api/tags", timeout=timeout)
         return bool(response.status_code == 200)
     except Exception:
-        retrurn False
+        return False
     # #endtry
 # #enddef _ollama_is_running
-
-
 
 
 
@@ -67,9 +68,14 @@ def _build_claude(s: Settings) -> ChatAnthropic:
     )
 # #enddef _build_claude
 
-# def _build_gemini(s: Settings) -> typing.Any:
-#     ...
-# # #enddef _build_gemini
+def _build_gemini(s: Settings) -> ChatGoogleGenerativeAI:
+    return ChatGoogleGenerativeAI(
+        model             = s.gemini_model or DEFAULT_GEMINI_MODEL,
+        google_api_key    = s.google_api_key,
+        temperature       = s.gemini_temperature,
+        max_output_tokens = s.gemini_max_tokens or 4096,
+    )
+# #enddef _build_gemini
 
 def _build_ollama(s: Settings) -> ChatOllama:
     return ChatOllama(
@@ -104,6 +110,23 @@ def build_llm(settings: Settings) -> BaseChatModel:
     #endregion -------------- ONLY CLAUDE -------------- #
 
 
+    #region    -------------- ONLY CLAUDE -------------- #
+
+    if (provider == "gemini"):
+        if not settings.google_api_key:
+            raise RuntimeError(
+                "LLM_PROVIDER=gemini ma GOOGLE_API_KEY non è impostata nel .env"
+            )
+        # #endif
+
+        model = settings.gemini_model or DEFAULT_GEMINI_MODEL
+        logger.info("LLM -> Gemini (%s), model")
+        return _build_gemini(settings)
+    # #endif
+
+    #endregion -------------- ONLY CLAUDE -------------- #
+
+
     #region    -------------- ONLY OLLAMA -------------- #
 
     if (provider == "ollama"):
@@ -119,60 +142,117 @@ def build_llm(settings: Settings) -> BaseChatModel:
 
     #endregion -------------- ONLY OLLAMA -------------- #
 
-
-    has_claude: bool = bool(settings.anthropic_api_key)
-    # has_gemini: bool = bool(settings.google_api_key)
-    has_ollama: bool = _ollama_is_running(settings.ollama_base_url)
-
-    if (has_claude and has_ollama):
-        # Ideal case: Claude as primary with an automatic fallback on
-        # Ollama with LangChain's .with_fallback() catches
-        # the exceptions and re-execute the same
-        # call on the fallback model
-
-        claude = _build_claude(settings)
-        # gemini = _build_gemini(settings)
-        ollama = _build_ollama(settings)
-        llm = claude.with_fallback(
-            ollama,
-            exceptions_to_handle=(
-                anthropic.APIConnectionError,
-                anthropic.RateLimitError,
-                anthropic.APIStatusError,
-            ),
-        )
-        logger.info(
-            "LLM → Claude (%s) & Ollama fallback (%s)",
-            settings.claude_model,
-            settings.ollama_model,
-        )
-
-        return llm
-    # #endif
+    has_claude = bool(settings.anthropic_api_key)
+    has_gemini = bool(settings.google_api_key)
+    has_ollama = _ollama_is_running(settings.ollama_base_url)
  
-    if (has_claude):
-        logger.info(
-            "LLM → Claude (%s) [Ollama is not available]",
-            settings.claude_model
+    available: list[BaseChatModel] = []
+    labels: list[str] = []
+ 
+    if has_claude:
+        available.append(_build_claude(settings))
+        labels.append(f"Claude ({settings.claude_model})")
+ 
+    if has_gemini:
+        available.append(_build_gemini(settings))
+        labels.append(f"Gemini ({settings.gemini_model or 'gemini-2.0-flash'})")
+ 
+    if has_ollama:
+        available.append(_build_ollama(settings))
+        labels.append(f"Ollama ({settings.ollama_model})")
+ 
+    if not available:
+        raise RuntimeError(
+            "Nessun LLM disponibile. Soluzioni:\n"
+            "  1) Imposta ANTHROPIC_API_KEY nel .env  (Claude)\n"
+            "  2) Imposta GOOGLE_API_KEY nel .env     (Gemini — gratuito)\n"
+            "  3) Avvia Ollama: ollama serve && ollama pull llama3.1:8b"
         )
-
-        return _build_claude(settings)
-    # #endif
-
-    if (has_ollama):
-        logger.warning(
-            "LLM → Ollama (%s) [ANTHROPIC_API_KEY not set — using Ollama]",
-            settings.ollama_model,
-        )
-
-        return _build_ollama(settings)
-    # #endif
-
-    raise RuntimeError(
-        "No LLM are available right now. Possible solutions:\n"
-        "- 1) Set the ANTHROPIC_API_KEY key/value inside the .env file\n"
-        "- 2) Start Ollama: 'ollama serve && ollama pull llama3.1:8b'"
+ 
+    # Se c'è un solo provider, usalo diretto
+    if len(available) == 1:
+        logger.info("LLM → %s [unico provider disponibile]", labels[0])
+        return available[0]
+ 
+    # Altrimenti: primario + fallback chain
+    # with_fallbacks() accetta una lista e li prova in ordine
+    primary = available[0]
+    fallbacks = available[1:]
+    llm = primary.with_fallbacks(
+        fallbacks,
+        exceptions_to_handle=(
+            anthropic.APIConnectionError,
+            anthropic.RateLimitError,
+            anthropic.APIStatusError,
+            ChatGoogleGenerativeAIError,
+            Exception,  # cattura anche errori Gemini/Ollama se il primario fallisce
+        ),
     )
+ 
+    chain_str = " → ".join(labels)
+    logger.info("LLM → %s [fallback chain]", chain_str)
+    return llm
+
+    # # # has_claude: bool = bool(settings.anthropic_api_key)
+    # # # has_gemini: bool = bool(settings.google_api_key)
+    # # # has_ollama: bool = _ollama_is_running(settings.ollama_base_url)
+
+    # # # if (has_claude and has_gemini and has_ollama):
+    # # #     # Ideal case: Claude as primary with an automatic fallback on
+    # # #     # Ollama with LangChain's .with_fallback() catches
+    # # #     # the exceptions and re-execute the same
+    # # #     # call on the fallback model
+
+    # # #     claude = _build_claude(settings)
+    # # #     gemini = _build_gemini(settings)
+    # # #     ollama = _build_ollama(settings)
+
+    # # #     # NOTE: update the llm with ollama
+    # # #     llm = claude.with_fallback(
+    # # #         gemini,
+    # # #         exceptions_to_handle=(
+    # # #             anthropic.APIConnectionError,
+    # # #             anthropic.RateLimitError,
+    # # #             anthropic.APIStatusError,
+    # # #         ),
+    # # #     )
+    # # #     logger.info(
+    # # #         "LLM → Claude (%s) & Ollama fallback (%s)",
+    # # #         settings.claude_model,
+    # # #         settings.ollama_model,
+    # # #     )
+
+    # # #     return llm
+    # # # # #endif
+ 
+    # # # if (has_claude):
+    # # #     logger.info(
+    # # #         "LLM → Claude (%s) [Ollama is not available]",
+    # # #         settings.claude_model
+    # # #     )
+
+    # # #     return _build_claude(settings)
+    # # # # #endif
+
+    # # # if (has_gemini):
+    # # #     available.append(_build_gemini(settings))
+    # # #     labels.append(f"Gemini ({settings.gemini_model or 'gemini-2.0-flash'})")
+    # # # # #endif
+
+    # # # if (has_ollama):
+    # # #     logger.warning(
+    # # #         "LLM → Ollama (%s) [ANTHROPIC_API_KEY not set — using Ollama]",
+    # # #         settings.ollama_model,
+    # # #     )
+
+    # # #     return _build_ollama(settings)
+    # # # # #endif
+
+    # # # raise RuntimeError(
+    # # #     "No LLM are available right now. Possible solutions:\n"
+    # # #     "- 1) Set the ANTHROPIC_API_KEY key/value inside the .env file\n"
+    # # #     "- 2) Start Ollama: 'ollama serve && ollama pull llama3.1:8b'"
+    # # # )
 # #enddef build_llm
 
 class LLMBackend:
@@ -203,18 +283,18 @@ class LLMBackend:
         return self._llm
     # #enddef llm
 
-    def with_tools(self, tools: Sequence[BaseTool]) -> BaseChatModel:
+    def with_tools(self, tools: typing.Sequence[BaseTool]) -> BaseChatModel:
         """
-        Ritorna il LLM con i tool bindati.
-        Funziona sia con Claude (function calling nativo) che con
-        Ollama su modelli che supportano tool use (llama3.1, mistral-nemo, ecc.).
+        Returns the LLM with binded tools
+        This works with Claude (native function calling) and also with
+        Ollama on specific models that supports tool use (llama3.1, mistral-nemo, ecc.).
         """
 
         return self.llm.bind_tools(list(tools))
     # #enddef with_tools
 
     def reload(self) -> None:
-        """Forza la reinizializzazione, utile se la connessione è cambiata a runtime."""
+        """Forces the re-init, usefull if the connection has changed during runtime"""
 
         self._llm = None
         _ = self.llm  # trigger immediato
