@@ -12,7 +12,7 @@ Flusso del grafo:
     │                     END                  │
     └──────────────────────────────────────────┘
   (after every tool, returns to the cardinal node)
- 
+
 MemorySaver keeps the history in RAM.
 In the future, it can be replaced with SqliteSaver or RedisCheckpointer
 for persistence across sessions
@@ -80,7 +80,7 @@ def build_agent(settings: Settings, backend: typing.Optional[LLMBackend] = None)
     #   → "tools"   if it contains tool_calls
     #   → END       if it is a direct response
     graph.add_conditional_edges("cardinal", tools_condition)
- 
+
     # After each tool execution, the flow returns to the cardinal node
     # to process the result and decide the next step
     graph.add_edge("tools", "cardinal")
@@ -90,6 +90,6 @@ def build_agent(settings: Settings, backend: typing.Optional[LLMBackend] = None)
 
     tool_names: list[str] = [tool.name for tool in tools]
     logger.info("Agent compilato - tool attivi: %s", tool_names)
-    
+
     return compiled
 # #enddef build_agent

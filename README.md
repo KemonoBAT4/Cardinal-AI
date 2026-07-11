@@ -26,4 +26,4 @@ Its goal is to become a reliable digital assistant capable of understanding cont
 
 ## 📄 License
 
-This project is released under the license specified in this repository.
+This project is released under MIT Licence. For more information read the LICENCE [here]("https://github.com/KemonoBAT4/Cardinal-AI/blob/main/LICENSE")

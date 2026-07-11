@@ -30,7 +30,7 @@ def run_cli(agent) -> None:
     """
 
     thread_id : str  = str(uuid.uuid4())
-    config    : dict = {"configurable": {"thread_id": thread_id}} 
+    config    : dict = {"configurable": {"thread_id": thread_id}}
 
     console.print(
         Panel(

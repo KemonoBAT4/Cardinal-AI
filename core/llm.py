@@ -40,7 +40,7 @@ def _ollama_is_running(base_url: str, timeout: float = 3.0) -> bool:
     """
     #### DESCRIPTION:
     Checks if the Ollama is running
-    
+
     #### PARAMETERS:
     - base_url: str -> the ollama rul
     - timeout: bool -> httpx timeout for checks
@@ -110,7 +110,7 @@ def build_llm(settings: Settings) -> BaseChatModel:
     #endregion -------------- ONLY CLAUDE -------------- #
 
 
-    #region    -------------- ONLY CLAUDE -------------- #
+    #region    -------------- ONLY GEMINI -------------- #
 
     if (provider == "gemini"):
         if not settings.google_api_key:
@@ -120,11 +120,11 @@ def build_llm(settings: Settings) -> BaseChatModel:
         # #endif
 
         model = settings.gemini_model or DEFAULT_GEMINI_MODEL
-        logger.info("LLM -> Gemini (%s), model")
+        logger.info("LLM -> Gemini (%s)", model)
         return _build_gemini(settings)
     # #endif
 
-    #endregion -------------- ONLY CLAUDE -------------- #
+    #endregion -------------- ONLY GEMINI -------------- #
 
 
     #region    -------------- ONLY OLLAMA -------------- #
@@ -135,7 +135,7 @@ def build_llm(settings: Settings) -> BaseChatModel:
                 f"LLM_PROVIDER=ollama; Ollama is not responding at the IP={settings.ollama_base_url}"
             )
         # #endif
-        
+
         logger.info("LLM -> Ollama (%s)", settings.ollama_model)
         return _build_ollama(s = settings)
     # #endif
@@ -145,22 +145,25 @@ def build_llm(settings: Settings) -> BaseChatModel:
     has_claude = bool(settings.anthropic_api_key)
     has_gemini = bool(settings.google_api_key)
     has_ollama = _ollama_is_running(settings.ollama_base_url)
- 
+
     available: list[BaseChatModel] = []
-    labels: list[str] = []
- 
+    labels   : list[str]           = []
+
     if has_claude:
         available.append(_build_claude(settings))
         labels.append(f"Claude ({settings.claude_model})")
- 
+    # #endif
+
     if has_gemini:
         available.append(_build_gemini(settings))
         labels.append(f"Gemini ({settings.gemini_model or 'gemini-2.0-flash'})")
- 
+    # #endif
+
     if has_ollama:
         available.append(_build_ollama(settings))
         labels.append(f"Ollama ({settings.ollama_model})")
- 
+    # #endif
+
     if not available:
         raise RuntimeError(
             "Nessun LLM disponibile. Soluzioni:\n"
@@ -168,16 +171,19 @@ def build_llm(settings: Settings) -> BaseChatModel:
             "  2) Imposta GOOGLE_API_KEY nel .env     (Gemini — gratuito)\n"
             "  3) Avvia Ollama: ollama serve && ollama pull llama3.1:8b"
         )
- 
-    # Se c'è un solo provider, usalo diretto
+    # #endif
+
+    # if there's only on provider, returns it directly
     if len(available) == 1:
         logger.info("LLM → %s [unico provider disponibile]", labels[0])
         return available[0]
- 
-    # Altrimenti: primario + fallback chain
-    # with_fallbacks() accetta una lista e li prova in ordine
-    primary = available[0]
+    # #endif
+
+    # otherwise, primary +  fallback chain
+    primary   = available[0]
     fallbacks = available[1:]
+
+    # accepts a list and tries in order
     llm = primary.with_fallbacks(
         fallbacks,
         exceptions_to_handle=(
@@ -185,14 +191,16 @@ def build_llm(settings: Settings) -> BaseChatModel:
             anthropic.RateLimitError,
             anthropic.APIStatusError,
             ChatGoogleGenerativeAIError,
-            Exception,  # cattura anche errori Gemini/Ollama se il primario fallisce
+            Exception,
         ),
     )
- 
+
     chain_str = " → ".join(labels)
     logger.info("LLM → %s [fallback chain]", chain_str)
     return llm
 
+    # NOTE: this is the old code implementation, is currently just commented because it might be usefull
+    # in future implementations or fixes
     # # # has_claude: bool = bool(settings.anthropic_api_key)
     # # # has_gemini: bool = bool(settings.google_api_key)
     # # # has_ollama: bool = _ollama_is_running(settings.ollama_base_url)
@@ -224,7 +232,7 @@ def build_llm(settings: Settings) -> BaseChatModel:
 
     # # #     return llm
     # # # # #endif
- 
+
     # # # if (has_claude):
     # # #     logger.info(
     # # #         "LLM → Claude (%s) [Ollama is not available]",
@@ -268,12 +276,12 @@ class LLMBackend:
     """
 
     _llm: typing.Optional[BaseChatModel]
- 
+
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self._llm: typing.Optional[BaseChatModel] = None
     # #enddef __init__
- 
+
     @property
     def llm(self) -> BaseChatModel:
         if self._llm is None:
@@ -297,7 +305,6 @@ class LLMBackend:
         """Forces the re-init, usefull if the connection has changed during runtime"""
 
         self._llm = None
-        _ = self.llm  # trigger immediato
+        _ = self.llm
     # #enddef reload
 # #endclass LLMBackend
-

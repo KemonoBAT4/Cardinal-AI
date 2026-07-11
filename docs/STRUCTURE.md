@@ -4,15 +4,15 @@ cardinal/
 ├── config/
 │   └── settings.py            # Pydantic BaseSettings
 ├── core/
-│   ├── agent.py               # LangGraph StateGraph principale
+│   ├── agent.py               # LangGraph StateGraph
 │   ├── planner.py             # Task decomposition
-│   ├── personality.py         # System prompt + persona Cardinal
+│   ├── personality.py         # System prompt + Cardinal personality
 │   └── context.py             # Context window management
 ├── interfaces/
 │   ├── voice/
 │   │   ├── stt.py             # Faster-Whisper
 │   │   ├── tts.py             # Coqui TTS / ElevenLabs
-│   │   └── wake_word.py       # Porcupine (riuso da Midnight)
+│   │   └── wake_word.py       # Porcupine
 │   ├── api/
 │   │   ├── server.py          # FastAPI app
 │   │   ├── routes/
@@ -23,7 +23,7 @@ cardinal/
 │   ├── long_term.py           # ChromaDB / Qdrant
 │   └── episodic.py            # SQLAlchemy + SQLite
 ├── knowledge/
-│   ├── indexer.py             # Ingest documenti → embedding
+│   ├── indexer.py             # Ingest documents → embedding
 │   ├── retriever.py           # RAG retrieval
 │   └── embeddings.py          # sentence-transformers
 ├── tools/
