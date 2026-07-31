@@ -1,8 +1,30 @@
 # virtual environment
-.venv
+.venv/
+venv/
+env/
 
 # env file
 .env
 
-# python caches
-__pycache__
+# cardinal's memory + database
+data/
+
+# python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# HuggingFace cache
+.cache/
+
+# ide
+.vscode/
+.idea/
+.swp
+.swo
+
+# os
+.DS_Store
+Thumbs.db
