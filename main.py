@@ -1,21 +1,23 @@
 """
-main.py -> Cardinal's entry point
+main.py  —  Entry point di Cardinal
 
-Use:
-    python main.py              # starts the CLI (default)
+Uso:
+    python main.py           # avvia la CLI (default)
     python main.py --mode cli
 """
-
-from dotenv import load_dotenv
-load_dotenv()
-
 import argparse
 import logging
+
+from dotenv import load_dotenv
+
+load_dotenv()  # deve essere la prima cosa, prima di tutti gli altri import
 
 from config.settings import Settings
 from core.agent import build_agent
 from core.llm import LLMBackend
-
+from memory.long_term import LongTermMemory
+from memory.manager import MemoryManager
+from memory.short_term import get_checkpointer
 
 logging.basicConfig(
     level=logging.INFO,
@@ -30,33 +32,38 @@ def main() -> None:
         "--mode",
         choices=["cli", "api", "voice"],
         default="cli",
-        help="Modalità di avvio (default: cli)",
     )
     args = parser.parse_args()
 
-    # loads the configuration from the .env
     settings = Settings()
 
-    # init the LLM backend (Claude + fallback Ollama)
+    # ── Backend LLM ───────────────────────────────────────────────────────────
     backend = LLMBackend(settings)
 
-    # compiles the agent LangGraph
-    agent = build_agent(settings, backend)
+    # ── Memoria ───────────────────────────────────────────────────────────────
+    checkpointer = get_checkpointer(settings.sqllite_path)   # SqliteSaver
+    long_term    = LongTermMemory(settings.chroma_persist_dir)
+    memory_mgr   = MemoryManager(long_term)
 
+    # ── Agent ─────────────────────────────────────────────────────────────────
+    agent = build_agent(
+        settings,
+        backend=backend,
+        memory_manager=memory_mgr,
+        checkpointer=checkpointer,
+    )
+
+    # ── Avvio ─────────────────────────────────────────────────────────────────
     if args.mode == "cli":
         from interfaces.cli import run_cli
-        run_cli(agent)
+        run_cli(agent, memory_manager=memory_mgr, llm=backend.llm)
 
     elif args.mode == "api":
-        # NOTE: Not implemented yet, need to be implemented with FastAPI
         raise NotImplementedError("Modalità API non ancora implementata.")
 
     elif args.mode == "voice":
-        # NOTE: Not implemented yet, need to be implemented with Porcupine + Whisper
         raise NotImplementedError("Modalità Voice non ancora implementata.")
-    # #endif
-# #enddef main
+
 
 if __name__ == "__main__":
     main()
-# #endif
