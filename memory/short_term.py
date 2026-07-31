@@ -9,12 +9,12 @@ Dependeciy : pip install langgraph-checkpoint-sqlite
 
 import sqlite3
 from pathlib import Path
- 
+
 from langgraph.checkpoint.sqlite import SqliteSaver
 
 # Unique persistent thread - every conversation made with cardinal
 THREAD_ID = "cardinal-main"
-  
+
 def get_checkpointer(db_path: str = "./data/cardinal_memory.db") -> SqliteSaver:
     """
     Creates and returns the SQLite checkpointer
@@ -25,7 +25,7 @@ def get_checkpointer(db_path: str = "./data/cardinal_memory.db") -> SqliteSaver:
     conn = sqlite3.connect(db_path, check_same_thread=False)
     return SqliteSaver(conn)
 # #enddef get_checkpointer
- 
+
 def get_session_config() -> dict:
     """
     The configuration that has to be passed to the agent.invoke()

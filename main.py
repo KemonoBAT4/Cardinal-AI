@@ -1,16 +1,17 @@
 """
-main.py  —  Entry point di Cardinal
+main.py  —  Cardinal's entry point
 
-Uso:
-    python main.py           # avvia la CLI (default)
+Use case:
+    python main.py           # starts the cli (default)
     python main.py --mode cli
 """
+
 import argparse
 import logging
 
 from dotenv import load_dotenv
 
-load_dotenv()  # deve essere la prima cosa, prima di tutti gli altri import
+load_dotenv()
 
 from config.settings import Settings
 from core.agent import build_agent
@@ -30,30 +31,26 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Cardinal AI Assistant")
     parser.add_argument(
         "--mode",
-        choices=["cli", "api", "voice"],
-        default="cli",
+        choices = ["cli", "api", "voice"],
+        default = "cli",
     )
     args = parser.parse_args()
 
     settings = Settings()
 
-    # ── Backend LLM ───────────────────────────────────────────────────────────
     backend = LLMBackend(settings)
 
-    # ── Memoria ───────────────────────────────────────────────────────────────
     checkpointer = get_checkpointer(settings.sqllite_path)   # SqliteSaver
     long_term    = LongTermMemory(settings.chroma_persist_dir)
     memory_mgr   = MemoryManager(long_term)
 
-    # ── Agent ─────────────────────────────────────────────────────────────────
     agent = build_agent(
         settings,
-        backend=backend,
-        memory_manager=memory_mgr,
-        checkpointer=checkpointer,
+        backend        = backend,
+        memory_manager = memory_mgr,
+        checkpointer   = checkpointer,
     )
 
-    # ── Avvio ─────────────────────────────────────────────────────────────────
     if args.mode == "cli":
         from interfaces.cli import run_cli
         run_cli(agent, memory_manager=memory_mgr, llm=backend.llm)
@@ -63,7 +60,9 @@ def main() -> None:
 
     elif args.mode == "voice":
         raise NotImplementedError("Modalità Voice non ancora implementata.")
-
+    # #endif
+# #enddef main
 
 if __name__ == "__main__":
     main()
+# #endif
