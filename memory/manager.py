@@ -1,14 +1,17 @@
 """
-memory/manager.py  —  Coordinatore del sistema di memoria di Cardinal
+memory/manager.py - Coordinates the memory of Cardinal.
 
-Due responsabilità:
-  1. get_context(query)          → recupera memorie rilevanti prima della risposta
-  2. extract_and_store(h, a, llm) → estrae nuovi fatti dopo ogni scambio
+Responsabilities:
+  1. get_context(query)           -> retrieves the relevant memories before each response
+  2. extract_and_store(h, a, llm) -> extract new memories from the conversation
 """
+
 import logging
 
 from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import HumanMessage, AIMessage
 from memory.long_term import LongTermMemory
+from utils.helpers import extract_text  
 
 logger = logging.getLogger(__name__)
 
@@ -39,17 +42,20 @@ Se non ci sono fatti rilevanti scrivi esattamente: NESSUNO
 # messages that are too short or trivial to analyze
 _TRIVIAL = {"come va", "ciao", "grazie", "ok", "bene", "perfetto", "esci", "quit"}
 
-
 class MemoryManager:
+
+    long_term: LongTermMemory
+
     def __init__(self, long_term: LongTermMemory) -> None:
         self.long_term = long_term
     # #enddef __init__
 
     def get_context(self, query: str) -> str:
         """
-        Recupera le memorie rilevanti e le formatta per il system prompt.
-        Ritorna stringa vuota se non ci sono memorie pertinenti.
+        Retrieves the relevant memories and formats them for the system prompt.
+        Returns an empty string if no relevant memories are found.
         """
+
         memories = self.long_term.search(query, k=5)
 
         if not memories:
@@ -62,33 +68,24 @@ class MemoryManager:
     # #enddef get_context
 
     def extract_and_store(
-        self, human_msg: str, ai_msg: str, llm: BaseChatModel
+        self,
+        human_msg : str,
+        ai_msg    : str,
+        llm       : BaseChatModel,
     ) -> None:
         """
-        Estrae fatti rilevanti dallo scambio e li salva nella long-term memory.
-        Salta automaticamente conversazione banale per non sprecare chiamate API.
+        Extracts the relevant facts from the conversation and stores them in the long-term memory.
         """
-        # Salta se il messaggio è troppo corto o banale
-        if len(human_msg.strip()) < 10:
-            return
-        # #endif
 
         if any(k in human_msg.lower() for k in _TRIVIAL):
             return
         # #endif
 
         try:
-            prompt = _EXTRACTION_PROMPT.format(human=human_msg, ai=ai_msg)
-            response = llm.invoke(prompt)
-            raw = response.content if hasattr(response, "content") else response
-            if isinstance(raw, list):
-                content = " ".join(
-                    block.get("text", "") if isinstance(block, dict) else str(block)
-                    for block in raw
-                ).strip()
-            else:
-                content = str(raw)
-            # #endif
+            prompt   : str       = _EXTRACTION_PROMPT.format(human=human_msg, ai=ai_msg)
+            response : AIMessage = llm.invoke(prompt)
+
+            content: str = extract_text(response)
 
             if "NESSUNO" in content.upper():
                 return
